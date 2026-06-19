@@ -2,7 +2,7 @@
 
 <img src="./screenshot.png" width="400">
 
-Fork of [ccusage-menubar-app](https://github.com/6/ccusage-menubar-app)
+Fork of [ccusage-macos-menubar](https://github.com/6/ccusage-macos-menuba))
 
 ## Overview
 
