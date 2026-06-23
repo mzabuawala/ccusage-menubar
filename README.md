@@ -1,6 +1,10 @@
 # CCUsage Menubar App
 
+## Healthy State
 <img src="./screenshot.png" width="400">
+
+## Error State
+<img src="./screenshot-2.png" width="400">
 
 Fork of [ccusage-macos-menubar](https://github.com/6/ccusage-macos-menubar)
 

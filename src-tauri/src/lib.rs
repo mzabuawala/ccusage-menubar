@@ -269,6 +269,58 @@ async fn refresh_data(app_handle: &tauri::AppHandle) {
 }
 
 // ---------------------------------------------------------------------------
+// Tray icon tinting
+// ---------------------------------------------------------------------------
+
+/// Re-colour every non-transparent pixel in a PNG to (r, g, b), keeping alpha.
+fn tint_png(bytes: &[u8], r: u8, g: u8, b: u8) -> Vec<u8> {
+    let img = image::load_from_memory(bytes).expect("valid png");
+    let mut rgba = img.to_rgba8();
+    for pixel in rgba.pixels_mut() {
+        if pixel[3] > 0 {
+            pixel[0] = r;
+            pixel[1] = g;
+            pixel[2] = b;
+        }
+    }
+    let mut buf = Vec::new();
+    image::DynamicImage::ImageRgba8(rgba)
+        .write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png)
+        .expect("png encode");
+    buf
+}
+
+#[tauri::command]
+fn set_claude_status(app: tauri::AppHandle, indicator: String) {
+    let Some(tray) = app.tray_by_id("main") else { return };
+    let bars = include_bytes!("../icons/bars.png");
+
+    match indicator.as_str() {
+        "none" => {
+            let icon = tauri::image::Image::from_bytes(bars).unwrap();
+            let _ = tray.set_icon(Some(icon));
+            #[cfg(target_os = "macos")]
+            let _ = tray.set_icon_as_template(true);
+        }
+        "minor" => {
+            let tinted = tint_png(bars, 255, 159, 10);
+            let icon = tauri::image::Image::from_bytes(&tinted).unwrap();
+            let _ = tray.set_icon(Some(icon));
+            #[cfg(target_os = "macos")]
+            let _ = tray.set_icon_as_template(false);
+        }
+        "major" | "critical" => {
+            let tinted = tint_png(bars, 255, 59, 48);
+            let icon = tauri::image::Image::from_bytes(&tinted).unwrap();
+            let _ = tray.set_icon(Some(icon));
+            #[cfg(target_os = "macos")]
+            let _ = tray.set_icon_as_template(false);
+        }
+        _ => {}
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tray menu (right-click) — actions only; stats live in the popover window
 // ---------------------------------------------------------------------------
 
@@ -321,7 +373,7 @@ fn toggle_popover(app: &tauri::AppHandle, rect: tauri::Rect) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_stats, refresh_now, quit_app, debug_info])
+        .invoke_handler(tauri::generate_handler![get_stats, refresh_now, quit_app, debug_info, set_claude_status])
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
