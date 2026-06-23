@@ -291,6 +291,21 @@ fn tint_png(bytes: &[u8], r: u8, g: u8, b: u8) -> Vec<u8> {
 }
 
 #[tauri::command]
+async fn fetch_status_html() -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let html = client
+        .get("https://status.claude.com/")
+        .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .text()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(html)
+}
+
+#[tauri::command]
 fn set_claude_status(app: tauri::AppHandle, indicator: String) {
     let Some(tray) = app.tray_by_id("main") else { return };
     let bars = include_bytes!("../icons/bars.png");
@@ -373,7 +388,7 @@ fn toggle_popover(app: &tauri::AppHandle, rect: tauri::Rect) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_stats, refresh_now, quit_app, debug_info, set_claude_status])
+        .invoke_handler(tauri::generate_handler![get_stats, refresh_now, quit_app, debug_info, set_claude_status, fetch_status_html])
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);

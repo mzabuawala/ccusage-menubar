@@ -23,12 +23,93 @@ interface Stats {
   days: DayStat[];
 }
 
+// ---- Uptime data types ----
+
+interface Outages {
+  p?: number;
+  m?: number;
+}
+
+interface DayStatus {
+  date: string;
+  outages: Outages;
+  related_events: { name: string; code: string }[];
+}
+
+interface ComponentData {
+  component: { code: string; name: string; startDate: string };
+  days: DayStatus[];
+}
+
+interface UptimeData {
+  [componentId: string]: ComponentData;
+}
+
+interface ComponentStatus {
+  name: string;
+  icon: string;
+  latestDate: string;
+}
+
+// ---- Uptime helpers ----
+
+function statusIcon(outages: Outages): string {
+  if (outages.m !== undefined) return "🔴";
+  if (outages.p !== undefined) return "🟠";
+  return "🟢";
+}
+
+function latestDay(days: DayStatus[]): DayStatus | null {
+  if (days.length === 0) return null;
+  return [...days].sort((a, b) => b.date.localeCompare(a.date))[0];
+}
+
+function parseUptimeData(html: string): UptimeData | null {
+  const marker = "var uptimeData = ";
+  const markerIdx = html.indexOf(marker);
+  if (markerIdx === -1) return null;
+
+  const objStart = html.indexOf("{", markerIdx);
+  if (objStart === -1) return null;
+
+  let depth = 0;
+  let objEnd = -1;
+  for (let i = objStart; i < html.length; i++) {
+    if (html[i] === "{") depth++;
+    else if (html[i] === "}") {
+      depth--;
+      if (depth === 0) {
+        objEnd = i;
+        break;
+      }
+    }
+  }
+
+  if (objEnd === -1) return null;
+
+  const objStr = html.slice(objStart, objEnd + 1);
+  try {
+    return JSON.parse(objStr) as UptimeData;
+  } catch {
+    try {
+      // Safe for trusted source (status.claude.com); avoids JSON limitations
+      // eslint-disable-next-line no-new-func
+      return new Function(`return ${objStr}`)() as UptimeData;
+    } catch {
+      return null;
+    }
+  }
+}
+
+// ---- App ----
+
 const money = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 function App() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [claudeStatus, setClaudeStatus] = useState<ClaudeStatus | null>(null);
+  const [componentStatuses, setComponentStatuses] = useState<ComponentStatus[]>([]);
 
   const load = async () => {
     try {
@@ -46,20 +127,45 @@ function App() {
       setClaudeStatus(status);
       await invoke("set_claude_status", { indicator: status.indicator });
     } catch {
-      // http request failed, set status to critical
       setClaudeStatus({ indicator: "critical", description: "Unable to fetch status" });
       await invoke("set_claude_status", { indicator: "critical" });
+    }
+  };
+
+  const loadUptimeData = async () => {
+    try {
+      const html = await invoke<string>("fetch_status_html");
+      const uptimeData = parseUptimeData(html);
+      if (!uptimeData) return;
+
+      const statuses: ComponentStatus[] = Object.values(uptimeData)
+        .map((data) => {
+          const day = latestDay(data.days);
+          return {
+            name: data.component.name,
+            icon: day ? statusIcon(day.outages) : "🟢",
+            latestDate: day?.date ?? "N/A",
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      setComponentStatuses(statuses);
+    } catch (e) {
+      console.error("loadUptimeData failed", e);
     }
   };
 
   useEffect(() => {
     load();
     loadStatus();
+    loadUptimeData();
     const unlisten = listen("stats-updated", () => load());
-    const interval = setInterval(loadStatus, 1 * 60 * 1000);
+    const statusInterval = setInterval(loadStatus, 1 * 60 * 1000);
+    const uptimeInterval = setInterval(loadUptimeData, 2 * 60 * 1000);
     return () => {
       unlisten.then((f) => f());
-      clearInterval(interval);
+      clearInterval(statusInterval);
+      clearInterval(uptimeInterval);
     };
   }, []);
 
@@ -104,6 +210,23 @@ function App() {
           <div className={`claude-status indicator-${claudeStatus.indicator}`}>
             <span className="status-dot" />
             <span className="status-text">{claudeStatus.description}</span>
+          </div>
+        </>
+      )}
+
+      {componentStatuses.length > 0 && (
+        <>
+          <div className="divider" />
+          <div className="uptime-section">
+            {componentStatuses.map((cs: ComponentStatus) => (
+              <div key={cs.name} className="uptime-row">
+                <span className="uptime-name">{cs.name}</span>
+                <span className="uptime-meta">
+                  <span>{cs.icon}</span>
+                  <span className="uptime-date">{cs.latestDate}</span>
+                </span>
+              </div>
+            ))}
           </div>
         </>
       )}
