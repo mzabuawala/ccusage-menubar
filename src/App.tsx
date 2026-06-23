@@ -9,6 +9,11 @@ interface DayStat {
   isToday: boolean;
 }
 
+interface ClaudeStatus {
+  indicator: "none" | "minor" | "major" | "critical";
+  description: string;
+}
+
 interface Stats {
   available: boolean;
   hasData: boolean;
@@ -23,6 +28,7 @@ const money = (n: number) =>
 
 function App() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [claudeStatus, setClaudeStatus] = useState<ClaudeStatus | null>(null);
 
   const load = async () => {
     try {
@@ -32,11 +38,28 @@ function App() {
     }
   };
 
+  const loadStatus = async () => {
+    try {
+      const res = await fetch("https://status.claude.com/api/v2/status.json");
+      const data = await res.json();
+      const status: ClaudeStatus = data.status;
+      setClaudeStatus(status);
+      await invoke("set_claude_status", { indicator: status.indicator });
+    } catch {
+      // http request failed, set status to critical
+      setClaudeStatus({ indicator: "critical", description: "Unable to fetch status" });
+      await invoke("set_claude_status", { indicator: "critical" });
+    }
+  };
+
   useEffect(() => {
     load();
+    loadStatus();
     const unlisten = listen("stats-updated", () => load());
+    const interval = setInterval(loadStatus, 1 * 60 * 1000);
     return () => {
       unlisten.then((f) => f());
+      clearInterval(interval);
     };
   }, []);
 
@@ -71,6 +94,16 @@ function App() {
                 dim={d.cost === 0}
               />
             ))}
+          </div>
+        </>
+      )}
+
+      {claudeStatus && (
+        <>
+          <div className="divider" />
+          <div className={`claude-status indicator-${claudeStatus.indicator}`}>
+            <span className="status-dot" />
+            <span className="status-text">{claudeStatus.description}</span>
           </div>
         </>
       )}

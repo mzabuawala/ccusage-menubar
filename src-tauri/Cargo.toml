@@ -25,5 +25,6 @@ serde_json = "1"
 tokio = { version = "1", features = ["process", "macros", "time"] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5.0"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 

@@ -46,7 +46,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI4ODk4QjFDQzc2MUI5N0EKUldSNnVXSEhISXVKS0Nhc2l6MEdQNzcwK1doOUx2bUNBdUlQek1HdXFuZ3I3aXFmaDU4d1kxR0sK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU0OTRDRjU5ODczRTcyOUYKUldTZmNqNkhXYytVNUJhZ3NEbmZSZi9hZGhtTTJOdnBtNEdlVmkzRmwrQVNsTXhwMGdvNFU0ajIK",
       "endpoints": [
         "https://github.com/crudo/ccusage-menubar/releases/latest/download/latest.json"
       ]
