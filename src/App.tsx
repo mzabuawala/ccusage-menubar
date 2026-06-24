@@ -128,7 +128,11 @@ function App() {
       await invoke("set_claude_status", { indicator: status.indicator });
     } catch {
       setClaudeStatus({ indicator: "critical", description: "Unable to fetch status" });
-      await invoke("set_claude_status", { indicator: "critical" });
+      try {
+        await invoke("set_claude_status", { indicator: "critical" });
+      } catch {
+        // IPC not yet ready on early startup
+      }
     }
   };
 
@@ -136,7 +140,10 @@ function App() {
     try {
       const html = await invoke<string>("fetch_status_html");
       const uptimeData = parseUptimeData(html);
-      if (!uptimeData) return;
+      if (!uptimeData) {
+        console.error("parseUptimeData: marker not found. HTML snippet:", html.slice(0, 500));
+        return;
+      }
 
       const statuses: ComponentStatus[] = Object.values(uptimeData)
         .map((data) => {
@@ -156,14 +163,28 @@ function App() {
   };
 
   useEffect(() => {
+    let unlistenFn: (() => void) | null = null;
+
     load();
     loadStatus();
     loadUptimeData();
-    const unlisten = listen("stats-updated", () => load());
+
+    // listen uses transformCallback which can race with Tauri IPC init in dev
+    // mode — retry with backoff until it succeeds
+    const setupListener = async (attempt = 0) => {
+      try {
+        unlistenFn = await listen("stats-updated", () => load());
+      } catch {
+        if (attempt < 10) setTimeout(() => setupListener(attempt + 1), 50 * (attempt + 1));
+      }
+    };
+    setupListener();
+
     const statusInterval = setInterval(loadStatus, 1 * 60 * 1000);
     const uptimeInterval = setInterval(loadUptimeData, 2 * 60 * 1000);
+
     return () => {
-      unlisten.then((f) => f());
+      unlistenFn?.();
       clearInterval(statusInterval);
       clearInterval(uptimeInterval);
     };

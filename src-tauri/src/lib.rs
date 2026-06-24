@@ -292,16 +292,26 @@ fn tint_png(bytes: &[u8], r: u8, g: u8, b: u8) -> Vec<u8> {
 
 #[tauri::command]
 async fn fetch_status_html() -> Result<String, String> {
+    eprintln!("[fetch_status_html] fetching https://status.claude.com/ ...");
     let client = reqwest::Client::new();
-    let html = client
+    let response = client
         .get("https://status.claude.com/")
         .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
         .send()
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| {
+            eprintln!("[fetch_status_html] request failed: {e:#?}");
+            e.to_string()
+        })?;
+    eprintln!("[fetch_status_html] HTTP status: {}", response.status());
+    let html = response
         .text()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            eprintln!("[fetch_status_html] failed to read body: {e}");
+            e.to_string()
+        })?;
+    eprintln!("[fetch_status_html] received {} bytes; contains marker: {}", html.len(), html.contains("var uptimeData = "));
     Ok(html)
 }
 
